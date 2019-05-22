@@ -12,7 +12,19 @@ Then run the following command:
 `% git config --global user.asana-key "MY_ASANA_API_KEY" # (get the api key at http://app.asana.com/-/account_api)`
 
 Then chmod your hooks folder:
+
 `% chmod 655 .git/hooks`
+
+How to test your script:
+
+```
+1. Create commit (e.g. Make some cool feature #1333866499943893) 
+2. 1333866499943893 - id of your asana task
+3. Execute command from your project folder
+
+./.git/hooks/post-commit
+```
+
 
 Now in your commits, you can write messages like "Tweaked the widget; fixed #1, #2, and #3; references #4 and #5; oh yeah, and closes #6" and the right thing will happen.
 
