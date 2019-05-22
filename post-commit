@@ -4,6 +4,7 @@
 # 
 # Added Bitbucket and GitHub links to Asana commits
 # modified by Richard Sumilang <me@richardsumilang.com>
+# modified by Anton Am <antonamru@gmail.com>
 
 # -----------------------
 # necessary configuration:
@@ -14,92 +15,107 @@
 # git config --local user.asana-project "PROJECT_ID" (found in the URL)
 # -----------------------
 
-apikey=$(git config user.asana-key)
+apiKey=$(git config user.asana-key)
 
 # defaults
-if [[ $apikey == '' ]] ; then exit 0; fi
+if [[ "$apiKey" == '' ]] ; then
+    echo "====================== ERROR ================================="
+    echo "Please set asana api key (http://app.asana.com/-/account_api):"
+    echo ""
+    echo "git config --global user.asana-key \"MY_ASANA_API_KEY\""
+    exit 0;
+fi
 
-# Find repo host
-for gitRemote in `git remote get-url`; do
-    repo=`echo $gitRemote | egrep -o 'https?://[^ ]+'`
-    domain=`echo $repo | awk -F \/ '{l=split($3,a,"."); print (a[l-1]=="com"?a[l-2] OFS:X) a[l-1] OFS a[l]}' OFS="."`
-    
-    # Remove username if part of url
-    if [[ $domain == *"@"* ]]; then
-        domain=`echo $domain | awk -F"@" '{print $2}'`
+# Find main repo host
+gitRemote=`git remote get-url --push origin`
+
+# Github https url (https://github.com/owner/project.git)
+if [[ "$gitRemote" == "https://"* ]]; then
+    domain=`echo "$gitRemote" | awk -F "/" '{print $3}'`
+    repo=`echo "$gitRemote" | awk -F "." '{print $2}' | awk -F "/" '{print $2"/"$3}'`
+
+    # Bitbucket https url (https://user@bitbucket.org/owner/project.git)
+    if [[ domain == *"@"* ]]; then
+        domain=`echo "$domain" | awk -F "@" '{print $2}'`
     fi
-    
-    # Bitbucket or GitHub paths
-    if [[ $domain == 'bitbucket.org' ]]
-    then
-        repoPath=${repo/*bitbucket.org\//}
-        repoPath=${repoPath%.*}
-        commitUrl="https://bitbucket.org/$repoPath/commits/"
-        break;
-    elif [[ $domain == 'github.com' ]]
-    then
-        repoPath=${repo/*github.com\//}
-        repoPath=${repoPath%.*}
-        commitUrl="https://github.com/$repoPath/commit/"
-        break;
-    else
-        repoPath=$repo
-        commitUrl=''
-    fi
-done
+fi
 
+# Github and bitbucket ssh url (git@github.com:owner/project.git || git@bitbucket.org:owner/project.git)
+if [[ "$domain" == "" && "$gitRemote" == "git@"* ]]; then
+    domain=`echo "$gitRemote" | awk -F ":" '{print $1}' | awk -F "@" '{print $2}'`
+    repo=`echo "$gitRemote" | awk -F ":" '{print $2}' | awk -F "." '{print $1}'`
+fi;
 
-# hold the closed ticket numbers
-declare -a closed
-# hold the ticket numbers that are not closed, just touched
-declare -a referenced
-# track whether we're currently closing tickets or just referencing them
-closes='NO'
+if [[ "$domain" != "" ]]; then
 
-# regex pattern to recognize a story number
-taskid_pattern='#([0-9]*)'
-# regex pattern to recognize a "closing this ticket" word
-closes_pattern='([Ff]ix|[Cc]lose|[Cc]losing)'
-# regex pattern to recognize an "and" word (eg "fixes #1, #2, and #3")
-and_pattern='([Aa]nd|&)'
+    commitUrl="https://$domain/$repo/commits/"
 
-# get the checkin comment for parsing
-comment=$(git log --pretty=format:"%s %b" -n1)
-print_comment=$(git log --pretty=format:"Committed $commitUrl%h with message:
-\"%s\"
-to repository $repoPath" -n1)
-
-# break the commit comment down into words
-IFS=' ' read -a words <<< "$comment"
-
-for element in "${words[@]}"
-do
-    # if we have a task id, save it to the appropriate array
-    if [[ $element =~ $taskid_pattern ]]; then
-    if [ "${closes}" == "YES" ]; then
-        closed=("${closed[@]}" "${BASH_REMATCH[1]}")
-    fi
-    referenced=("${referenced[@]}" "${BASH_REMATCH[1]}")
-    # or else if we have a "closes" word, set the tracking bool accordingly
-    elif [[ $element =~ $closes_pattern ]]; then
-    closes='YES'
-    # and if we don't, set us back to referencing
-    # (if we're an "and", don't change any state)
-    elif [[ ! $element =~ $and_pattern ]]; then
+    # hold the closed ticket numbers
+    declare -a closed
+    # hold the ticket numbers that are not closed, just touched
+    declare -a referenced
+    # track whether we're currently closing tickets or just referencing them
     closes='NO'
-    fi
-done
 
-# touch the stories we've referenced
-for element in "${referenced[@]}"
-do
-    curl -u ${apikey}: https://app.asana.com/api/1.0/tasks/${element}/stories \
-         --data-urlencode "html_text=<body>${print_comment}</body>"> /dev/null 2>&1
-done
+    # regex pattern to recognize a story number
+    taskid_pattern='#([0-9]*)'
+    # regex pattern to recognize a "closing this ticket" word
+    closes_pattern='([Ff]ix|[Cc]lose|[Cc]losing)'
+    # regex pattern to recognize an "and" word (eg "fixes #1, #2, and #3")
+    and_pattern='([Aa]nd|&)'
 
-# close the tasks we've fixed
-for element in "${closed[@]}"
-do
-    curl --request PUT -u ${apikey}: https://app.asana.com/api/1.0/tasks/${element} \
-         -d "completed=true" > /dev/null 2>&1
-done
+    # get the checkin comment for parsing
+    comment=$(git log --pretty=format:"%s %b" -n1)
+    print_comment=$(git log --pretty=format:"Committed <a href='$commitUrl%h'>%h</a> with message:
+
+<em>%s</em>" -n1)
+
+    # break the commit comment down into words
+    IFS=' ' read -a words <<< "$comment"
+
+    for element in "${words[@]}"
+    do
+        # if we have a task id, save it to the appropriate array
+        if [[ "$element" =~ $taskid_pattern ]]; then
+        if [[ "${closes}" == "YES" ]]; then
+            closed=("${closed[@]}" "${BASH_REMATCH[1]}")
+        fi
+        referenced=("${referenced[@]}" "${BASH_REMATCH[1]}")
+        # or else if we have a "closes" word, set the tracking bool accordingly
+        elif [[ "$element" =~ $closes_pattern ]]; then
+        closes='YES'
+        # and if we don't, set us back to referencing
+        # (if we're an "and", don't change any state)
+        elif [[ ! "$element" =~ $and_pattern ]]; then
+        closes='NO'
+        fi
+    done
+
+    # touch the stories we've referenced
+    for element in "${referenced[@]}"
+    do
+        curl -u ${apiKey}: https://app.asana.com/api/1.0/tasks/${element}/stories \
+             --data-urlencode "html_text=<body>${print_comment}</body>" > /dev/null 2>&1
+    done
+
+    # close the tasks we've fixed
+    for element in "${closed[@]}"
+    do
+        curl --request PUT -u ${apiKey}: https://app.asana.com/api/1.0/tasks/${element} \
+             -d "completed=true" > /dev/null 2>&1
+    done
+
+else
+
+    echo "==================== ERROR ============================"
+    echo "Domain not found. Please check your push origin remote:"
+    echo "git remote get-url --push origin"
+    echo ""
+    echo "Remote examples:"
+    echo "https://github.com/owner/project.git"
+    echo "https://user@bitbucket.org/owner/project.git"
+    echo "git@github.com:owner/project.git"
+    echo "git@bitbucket.org:owner/project.git"
+    exit 0;
+
+fi
