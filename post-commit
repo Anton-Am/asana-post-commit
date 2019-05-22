@@ -17,27 +17,26 @@
 apikey=$(git config user.asana-key)
 
 # defaults
-if [ $apikey == '' ] ; then exit 0; fi
+if [[ $apikey == '' ]] ; then exit 0; fi
 
 # Find repo host
-for gitRemote in `git remote -v`; do
+for gitRemote in `git remote get-url`; do
     repo=`echo $gitRemote | egrep -o 'https?://[^ ]+'`
     domain=`echo $repo | awk -F \/ '{l=split($3,a,"."); print (a[l-1]=="com"?a[l-2] OFS:X) a[l-1] OFS a[l]}' OFS="."`
     
     # Remove username if part of url
-    if [[ $domain == *"@"* ]] 
-    then
+    if [[ $domain == *"@"* ]]; then
         domain=`echo $domain | awk -F"@" '{print $2}'`
     fi
     
     # Bitbucket or GitHub paths
-    if [ $domain == 'bitbucket.org' ]
+    if [[ $domain == 'bitbucket.org' ]]
     then
         repoPath=${repo/*bitbucket.org\//}
         repoPath=${repoPath%.*}
         commitUrl="https://bitbucket.org/$repoPath/commits/"
         break;
-    elif [ $domain == 'github.com' ]
+    elif [[ $domain == 'github.com' ]]
     then
         repoPath=${repo/*github.com\//}
         repoPath=${repoPath%.*}
@@ -95,7 +94,7 @@ done
 for element in "${referenced[@]}"
 do
     curl -u ${apikey}: https://app.asana.com/api/1.0/tasks/${element}/stories \
-         -d "text=${print_comment}" > /dev/null 2>&1
+         --data-urlencode "html_text=<body>${print_comment}</body>"> /dev/null 2>&1
 done
 
 # close the tasks we've fixed
