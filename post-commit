@@ -18,7 +18,7 @@
 apiKey=$(git config user.asana-key)
 
 # defaults
-if [[ "$apiKey" == '' ]] ; then
+if [[ "$apiKey" == '' ]]; then
     echo "====================== ERROR ================================="
     echo "Please set asana api key (http://app.asana.com/-/account_api):"
     echo ""
@@ -44,11 +44,17 @@ fi
 if [[ "$domain" == "" && "$gitRemote" == "git@"* ]]; then
     domain=`echo "$gitRemote" | awk -F ":" '{print $1}' | awk -F "@" '{print $2}'`
     repo=`echo "$gitRemote" | awk -F ":" '{print $2}' | awk -F "." '{print $1}'`
-fi;
+fi
 
 if [[ "$domain" != "" ]]; then
 
-    commitUrl="https://$domain/$repo/commits/"
+    if [[ "$domain" == "bitbucket.org" ]]; then
+        commitUrl="https://$domain/$repo/commits/"
+    fi
+
+    if [[ "$domain" == "github.com" ]]; then
+        commitUrl="https://$domain/$repo/commit/"
+    fi
 
     # hold the closed ticket numbers
     declare -a closed
@@ -66,7 +72,8 @@ if [[ "$domain" != "" ]]; then
 
     # get the checkin comment for parsing
     comment=$(git log --pretty=format:"%s %b" -n1)
-    print_comment=$(git log --pretty=format:"Committed <a href='$commitUrl%h'>%h</a> with message:
+    branch=$(git log --pretty=format:"%D" -n1 | awk -F ", " '{print $2}')
+    print_comment=$(git log --pretty=format:"Committed <a href='$commitUrl%h'>%h</a> in branch <b>$branch</b> with message:
 
 <em>%s</em>" -n1)
 
