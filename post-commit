@@ -72,10 +72,10 @@ if [[ "$domain" != "" ]]; then
 
     # get the checkin comment for parsing
     comment=$(git log --pretty=format:"%s %b" -n1)
-    branch=$(git log --pretty=format:"%D" -n1 | awk -F ", " '{print $2}')
-    print_comment=$(git log --pretty=format:"Committed <a href='$commitUrl%h'>%h</a> in branch <b>$branch</b> with message:
+    print_comment=$(git log --pretty=format:"Committed <a href='$commitUrl%h'>%h</a> in %d with message:
 
 <em>%s</em>" -n1)
+
 
     # break the commit comment down into words
     IFS=' ' read -a words <<< "$comment"
